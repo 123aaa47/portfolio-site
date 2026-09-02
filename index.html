@@ -28,6 +28,7 @@
     color: var(--text);
     -webkit-font-smoothing: antialiased;
     user-select: none;
+    -webkit-user-select: none;
   }
 
   /* ===== 顶部栏 ===== */
@@ -66,6 +67,7 @@
     cursor: grab;
     perspective: 1400px;
     -webkit-perspective: 1400px;
+    touch-action: pan-y;
   }
   .viewer.dragging { cursor: grabbing; }
 
@@ -119,7 +121,7 @@
     border-radius: 3px;
   }
 
-  /* 长图内容撑出 20000px 高度 */
+  /* 长图内容 */
   .card-content {
     width: 100%;
     min-height: 20000px;
@@ -149,6 +151,71 @@
     z-index: 2;
   }
 
+  /* ===== 右下角鸟瞰缩略图 ===== */
+  .minimap {
+    position: absolute;
+    bottom: 14px;
+    right: 14px;
+    width: 46px;
+    height: 170px;
+    background: rgba(0,0,0,0.6);
+    border-radius: 5px;
+    overflow: hidden;
+    z-index: 10;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.4);
+    pointer-events: auto;
+    cursor: pointer;
+  }
+  .minimap-track {
+    position: absolute;
+    top: 22px;
+    left: 4px;
+    right: 4px;
+    bottom: 6px;
+    background-color: rgba(200,200,200,0.15);
+    background-image:
+      linear-gradient(to right, rgba(255,255,255,0.08) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(255,255,255,0.08) 1px, transparent 1px);
+    background-size: 6px 6px;
+    border-radius: 2px;
+    overflow: hidden;
+  }
+  .minimap-viewport {
+    position: absolute;
+    left: 0;
+    right: 0;
+    background: rgba(64, 156, 255, 0.45);
+    border: 1px solid rgba(64, 156, 255, 0.9);
+    border-radius: 2px;
+    pointer-events: none;
+    transition: top 0.08s linear, height 0.08s linear;
+  }
+  .minimap-label {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 9px;
+    color: rgba(255,255,255,0.7);
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    background: rgba(0,0,0,0.3);
+  }
+  .minimap-pct {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    text-align: center;
+    font-size: 8px;
+    color: rgba(255,255,255,0.5);
+    line-height: 1.4;
+  }
+
   /* ===== 底部提示 ===== */
   .bottom-hint {
     position: fixed;
@@ -169,18 +236,19 @@
   /* ===== 响应式 ===== */
   @media (max-width: 900px) {
     :root { --card-w: 360px; --card-h: 80vh; }
+    .minimap { width: 38px; height: 140px; bottom: 10px; right: 10px; }
   }
   @media (max-width: 600px) {
     :root { --card-w: 280px; --card-h: 76vh; }
     .topbar { padding: 0 16px; }
     .topbar-title { font-size: 13px; }
     .bottom-hint { font-size: 11px; padding: 5px 12px; }
+    .minimap { width: 32px; height: 120px; }
   }
 </style>
 </head>
 <body>
 
-<!-- 顶部栏 -->
 <header class="topbar">
   <div class="topbar-title">作品集 · 长图浏览</div>
   <div class="topbar-counter">
@@ -190,7 +258,6 @@
   </div>
 </header>
 
-<!-- 主查看区 -->
 <main class="viewer" id="viewer">
   <div class="track" id="track"></div>
 </main>
@@ -202,9 +269,12 @@
   "use strict";
 
   var TOTAL = 50;
-  var current = 0;       // 当前中心索引（整数）
-  var dragOffset = 0;    // 拖动偏移量（像素）
+  var CONTENT_HEIGHT = 20000;
+
+  var current = 0;
+  var dragOffset = 0;
   var isDragging = false;
+  var pointerId = null;
   var startX = 0;
   var dragMoved = false;
   var suppressClick = false;
@@ -218,32 +288,115 @@
 
   function pad2(n) { return String(n).padStart(2, "0"); }
 
-  // ===== 创建 50 张卡片 =====
+  // ===== 创建卡片 =====
   var cards = [];
+  var cardInners = [];
+
   for (var i = 0; i < TOTAL; i++) {
     var card = document.createElement("div");
     card.className = "card";
     card.dataset.index = i;
-    card.innerHTML =
-      '<div class="card-inner">' +
-        '<div class="card-content">' +
-          '<span class="card-label">长图 ' + pad2(i + 1) + ' / ' + pad2(TOTAL) + '</span>' +
-          '<span class="card-dim">790 × 20000 px · 灰色网格</span>' +
-        '</div>' +
-      '</div>';
-    track.appendChild(card);
-    cards.push(card);
 
-    // 点击卡片 → 切换到该图
+    var inner = document.createElement("div");
+    inner.className = "card-inner";
+
+    var content = document.createElement("div");
+    content.className = "card-content";
+    content.innerHTML =
+      '<span class="card-label">长图 ' + pad2(i + 1) + ' / ' + pad2(TOTAL) + '</span>' +
+      '<span class="card-dim">790 × 20000 px · 灰色网格</span>';
+
+    // 鸟瞰缩略图
+    var minimap = document.createElement("div");
+    minimap.className = "minimap";
+    minimap.innerHTML =
+      '<div class="minimap-label">鸟瞰图</div>' +
+      '<div class="minimap-track">' +
+        '<div class="minimap-viewport"></div>' +
+      '</div>' +
+      '<div class="minimap-pct">0%</div>';
+
+    inner.appendChild(content);
+    inner.appendChild(minimap);
+    card.appendChild(inner);
+    track.appendChild(card);
+
+    cards.push(card);
+    cardInners.push(inner);
+
+    // 点击切换
     (function (idx) {
-      card.addEventListener("click", function () {
-        if (suppressClick) return;
+      card.addEventListener("click", function (e) {
+        if (suppressClick) { e.stopPropagation(); return; }
+        // 忽略点击在鸟瞰图上的情况
+        if (e.target.closest(".minimap")) return;
         goTo(idx);
       });
     })(i);
+
+    // 鸟瞰图点击跳转
+    (function (innerEl, minimapEl) {
+      minimapEl.addEventListener("click", function (e) {
+        e.stopPropagation();
+        var trackEl = minimapEl.querySelector(".minimap-track");
+        var rect = trackEl.getBoundingClientRect();
+        var ratio = (e.clientY - rect.top) / rect.height;
+        innerEl.scrollTop = ratio * CONTENT_HEIGHT;
+      });
+      // 鸟瞰图拖动
+      var minimapDragging = false;
+      minimapEl.addEventListener("mousedown", function (e) {
+        e.stopPropagation();
+        minimapDragging = true;
+        var trackEl = minimapEl.querySelector(".minimap-track");
+        function onMove(ev) {
+          if (!minimapDragging) return;
+          var rect = trackEl.getBoundingClientRect();
+          var ratio = Math.max(0, Math.min(1, (ev.clientY - rect.top) / rect.height));
+          innerEl.scrollTop = ratio * CONTENT_HEIGHT;
+        }
+        function onUp() {
+          minimapDragging = false;
+          document.removeEventListener("mousemove", onMove);
+          document.removeEventListener("mouseup", onUp);
+        }
+        document.addEventListener("mousemove", onMove);
+        document.addEventListener("mouseup", onUp);
+      });
+    })(inner, minimap);
+
+    // 滚动更新鸟瞰图
+    (function (innerEl, minimapEl) {
+      innerEl.addEventListener("scroll", function () {
+        updateMinimap(innerEl, minimapEl);
+      });
+    })(inner, minimap);
   }
 
-  // ===== 布局计算：Cover Flow =====
+  // 更新鸟瞰图指示器
+  function updateMinimap(innerEl, minimapEl) {
+    var viewport = minimapEl.querySelector(".minimap-viewport");
+    var pctEl = minimapEl.querySelector(".minimap-pct");
+    var trackEl = minimapEl.querySelector(".minimap-track");
+    if (!viewport || !trackEl) return;
+
+    var scrollTop = innerEl.scrollTop;
+    var viewH = innerEl.clientHeight;
+    var totalH = CONTENT_HEIGHT;
+    var trackH = trackEl.clientHeight;
+
+    var vpTop = (scrollTop / totalH) * trackH;
+    var vpHeight = Math.max(4, (viewH / totalH) * trackH);
+    if (vpTop + vpHeight > trackH) vpHeight = trackH - vpTop;
+
+    viewport.style.top = vpTop.toFixed(1) + "px";
+    viewport.style.height = vpHeight.toFixed(1) + "px";
+
+    var pct = Math.min(100, Math.round((scrollTop / (totalH - viewH)) * 100));
+    if (pctEl) pctEl.textContent = pct + "%";
+  }
+
+  // ===== 布局计算 =====
   function getCardWidth() {
     var w = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--card-w"));
     return isNaN(w) ? 500 : w;
@@ -251,31 +404,25 @@
 
   function layout() {
     var cardW = getCardWidth();
-    var spacing = cardW * 0.52;          // 卡片中心间距
-    var centerPos = current + dragOffset / spacing; // 实际中心（小数）
+    var spacing = cardW * 0.52;
+    var centerPos = current + dragOffset / spacing;
 
     for (var i = 0; i < cards.length; i++) {
       var card = cards[i];
       var d = i - centerPos;
       var absD = Math.abs(d);
 
-      // 超出范围的隐藏
       if (absD > 7) {
         card.style.opacity = "0";
         card.style.pointerEvents = "none";
-        card.style.transform = "translateX(" + (d * spacing) + "px) scale(0.15)";
+        card.style.transform = "translateX(" + (d * spacing).toFixed(1) + "px) scale(0.15)";
         continue;
       }
 
-      // 缩放：中心 1，每远一级衰减
       var scale = Math.max(0.2, 1 - absD * 0.21);
-      // 水平位移
       var tx = d * spacing;
-      // 透明度：远端渐隐
       var opacity = Math.max(0, 1 - absD * 0.16);
-      // 层级：中心在上
       var z = 1000 - Math.round(absD * 100);
-      // 透视旋转
       var rotY = d * -5;
 
       card.style.opacity = opacity.toFixed(3);
@@ -287,33 +434,44 @@
         "rotateY(" + rotY.toFixed(1) + "deg)";
     }
 
-    // 计数器
     var displayIdx = Math.max(0, Math.min(TOTAL - 1, Math.round(centerPos)));
     currentNumEl.textContent = pad2(displayIdx + 1);
   }
 
-  // ===== 切换到指定索引（带顺滑动画） =====
+  // ===== 切换 =====
   function goTo(idx) {
     idx = Math.max(0, Math.min(TOTAL - 1, idx));
     for (var i = 0; i < cards.length; i++) cards[i].classList.remove("dragging");
     current = idx;
     dragOffset = 0;
     layout();
+    // 更新新居中卡片的鸟瞰图
+    if (cardInners[current]) {
+      var mm = cards[current].querySelector(".minimap");
+      if (mm) updateMinimap(cardInners[current], mm);
+    }
   }
 
-  // ===== 鼠标拖动 =====
-  viewer.addEventListener("mousedown", function (e) {
-    if (e.button !== 0) return; // 仅左键
+  // ===== 拖动（Pointer Events，更 robust） =====
+  viewer.addEventListener("pointerdown", function (e) {
+    if (e.button !== 0 && e.pointerType === "mouse") return;
+    // 忽略鸟瞰图上的按下
+    if (e.target.closest(".minimap")) return;
+
     isDragging = true;
+    pointerId = e.pointerId;
     dragMoved = false;
     startX = e.clientX;
+    dragOffset = 0;
     viewer.classList.add("dragging");
     for (var i = 0; i < cards.length; i++) cards[i].classList.add("dragging");
+
+    try { viewer.setPointerCapture(e.pointerId); } catch (err) {}
     e.preventDefault();
   });
 
-  document.addEventListener("mousemove", function (e) {
-    if (!isDragging) return;
+  viewer.addEventListener("pointermove", function (e) {
+    if (!isDragging || e.pointerId !== pointerId) return;
     var dx = e.clientX - startX;
     if (Math.abs(dx) > 4) dragMoved = true;
     if (dragMoved) {
@@ -322,18 +480,22 @@
     }
   });
 
-  document.addEventListener("mouseup", function () {
+  function endDrag(e) {
     if (!isDragging) return;
+    if (e && e.pointerId !== pointerId) return;
+
     isDragging = false;
+    pointerId = null;
     viewer.classList.remove("dragging");
 
     var cardW = getCardWidth();
     var spacing = cardW * 0.52;
-    var threshold = spacing * 0.32;
+    var threshold = spacing * 0.3;
 
     var target = current;
-    if (dragOffset < -threshold) target = current + 1; // 左拖 → 下一张
-    else if (dragOffset > threshold) target = current - 1; // 右拖 → 上一张
+    // 方向修正：向右拖 → 下一张，向左拖 → 上一张
+    if (dragOffset > threshold) target = current + 1;
+    else if (dragOffset < -threshold) target = current - 1;
 
     for (var i = 0; i < cards.length; i++) cards[i].classList.remove("dragging");
     current = Math.max(0, Math.min(TOTAL - 1, target));
@@ -343,28 +505,38 @@
     // 抑制拖动后的误点击
     if (dragMoved) {
       suppressClick = true;
-      setTimeout(function () { suppressClick = false; }, 80);
+      setTimeout(function () { suppressClick = false; }, 120);
     }
+    dragMoved = false;
+  }
+
+  viewer.addEventListener("pointerup", endDrag);
+  viewer.addEventListener("pointercancel", endDrag);
+  viewer.addEventListener("lostpointercapture", function (e) {
+    if (isDragging) endDrag(e);
   });
 
-  // ===== 滚轮：控制居中卡片内部上下滚动 =====
+  // ===== 滚轮：居中卡片内部滚动 =====
   viewer.addEventListener("wheel", function (e) {
     if (isDragging) return;
     e.preventDefault();
-    var inner = cards[current].querySelector(".card-inner");
-    if (inner) inner.scrollTop += e.deltaY;
+    var inner = cardInners[current];
+    if (inner) {
+      inner.scrollTop += e.deltaY;
+    }
   }, { passive: false });
 
-  // ===== 触摸滑动 =====
-  var touchStartX = 0, touchStartTime = 0, touchMoved = false;
+  // ===== 触摸滑动（移动端） =====
+  var touchStartX = 0, touchMoved = false;
   viewer.addEventListener("touchstart", function (e) {
+    if (e.target.closest(".minimap")) return;
     touchStartX = e.touches[0].clientX;
-    touchStartTime = Date.now();
     touchMoved = false;
     for (var i = 0; i < cards.length; i++) cards[i].classList.add("dragging");
   }, { passive: true });
 
   viewer.addEventListener("touchmove", function (e) {
+    if (e.target.closest(".minimap")) return;
     var dx = e.touches[0].clientX - touchStartX;
     if (Math.abs(dx) > 8) {
       touchMoved = true;
@@ -381,11 +553,12 @@
       var spacing = cardW * 0.52;
       var threshold = spacing * 0.3;
       var target = current;
-      if (dragOffset < -threshold) target = current + 1;
-      else if (dragOffset > threshold) target = current - 1;
+      if (dragOffset > threshold) target = current + 1;
+      else if (dragOffset < -threshold) target = current - 1;
       current = Math.max(0, Math.min(TOTAL - 1, target));
       dragOffset = 0;
       layout();
+      touchMoved = false;
     }
   });
 
@@ -396,10 +569,21 @@
   });
 
   // ===== 窗口缩放 =====
-  window.addEventListener("resize", layout);
+  window.addEventListener("resize", function () {
+    layout();
+    if (cardInners[current]) {
+      var mm = cards[current].querySelector(".minimap");
+      if (mm) updateMinimap(cardInners[current], mm);
+    }
+  });
 
   // 初始化
   layout();
+  // 初始化第一张的鸟瞰图
+  if (cardInners[0]) {
+    var mm0 = cards[0].querySelector(".minimap");
+    if (mm0) updateMinimap(cardInners[0], mm0);
+  }
 })();
 </script>
 
