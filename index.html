@@ -5,30 +5,26 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>作品集 · 长图浏览</title>
 <style>
-  /* ===== 基础重置 ===== */
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
   :root {
-    --bg: #f0f0f0;
-    --viewer-bg: #e0e0e0;
-    --text: #1a1a1a;
-    --text-secondary: #888;
-    --arrow-bg: rgba(255,255,255,0.9);
-    --arrow-hover: #fff;
-    --arrow-disabled: rgba(200,200,200,0.5);
+    --bg: #111;
+    --text: #fff;
+    --text-secondary: rgba(255,255,255,0.55);
     --placeholder: #c8c8c8;
-    --placeholder-text: #999;
-    --topbar-height: 56px;
+    --card-w: 500px;
+    --card-h: 84vh;
+    --topbar-h: 52px;
   }
 
   html, body {
     height: 100%;
     overflow: hidden;
+    background: var(--bg);
   }
 
   body {
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
-    background: var(--bg);
     color: var(--text);
     -webkit-font-smoothing: antialiased;
     user-select: none;
@@ -37,171 +33,123 @@
   /* ===== 顶部栏 ===== */
   .topbar {
     position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    height: var(--topbar-height);
-    background: rgba(240,240,240,0.95);
-    backdrop-filter: blur(10px);
-    border-bottom: 1px solid #d8d8d8;
+    top: 0; left: 0; right: 0;
+    height: var(--topbar-h);
+    background: rgba(17,17,17,0.88);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border-bottom: 1px solid rgba(255,255,255,0.07);
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 0 24px;
-    z-index: 100;
+    padding: 0 28px;
+    z-index: 200;
   }
-
-  .topbar-title {
-    font-size: 16px;
-    font-weight: 700;
-    letter-spacing: -0.01em;
-  }
-
+  .topbar-title { font-size: 15px; font-weight: 600; letter-spacing: 0.01em; }
   .topbar-counter {
     font-size: 14px;
-    font-weight: 500;
     color: var(--text-secondary);
     font-variant-numeric: tabular-nums;
   }
-
   .topbar-counter .current {
     color: var(--text);
     font-weight: 700;
-    font-size: 16px;
+    font-size: 17px;
   }
 
-  /* ===== 主查看区 ===== */
+  /* ===== 查看器 ===== */
   .viewer {
     position: fixed;
-    top: var(--topbar-height);
-    left: 0;
-    right: 0;
-    bottom: 0;
-    display: flex;
-    align-items: stretch;
-    justify-content: center;
+    top: var(--topbar-h);
+    left: 0; right: 0; bottom: 0;
+    overflow: hidden;
+    cursor: grab;
+    perspective: 1400px;
+    -webkit-perspective: 1400px;
+  }
+  .viewer.dragging { cursor: grabbing; }
+
+  .track {
+    position: absolute;
+    top: 50%; left: 50%;
+    width: 0; height: 0;
+    transform-style: preserve-3d;
+    -webkit-transform-style: preserve-3d;
   }
 
-  /* 图片滚动容器 */
-  .image-container {
-    flex: 1;
-    display: flex;
-    justify-content: center;
+  /* ===== 卡片 ===== */
+  .card {
+    position: absolute;
+    top: 50%; left: 50%;
+    width: var(--card-w);
+    height: var(--card-h);
+    margin-left: calc(var(--card-w) / -2);
+    margin-top: calc(var(--card-h) / -2);
+    transform-style: preserve-3d;
+    -webkit-transform-style: preserve-3d;
+    will-change: transform, opacity;
+    transition:
+      transform 0.5s cubic-bezier(0.22, 0.61, 0.36, 1),
+      opacity 0.5s ease;
+  }
+  .card.dragging { transition: none; }
+
+  .card-inner {
+    width: 100%;
+    height: 100%;
     overflow-y: auto;
     overflow-x: hidden;
-    scroll-behavior: smooth;
-    -webkit-overflow-scrolling: touch;
-  }
-
-  .image-container::-webkit-scrollbar {
-    width: 8px;
-  }
-  .image-container::-webkit-scrollbar-track {
-    background: transparent;
-  }
-  .image-container::-webkit-scrollbar-thumb {
-    background: #bbb;
-    border-radius: 4px;
-  }
-  .image-container::-webkit-scrollbar-thumb:hover {
-    background: #999;
-  }
-
-  /* 长图占位 —— 790 x 20000，灰色底黑色网格 */
-  .long-image {
-    width: 790px;
-    max-width: 100%;
-    min-height: 20000px;
     background-color: var(--placeholder);
     background-image:
       linear-gradient(to right, rgba(0,0,0,0.18) 1px, transparent 1px),
       linear-gradient(to bottom, rgba(0,0,0,0.18) 1px, transparent 1px);
     background-size: 50px 50px;
+    border-radius: 6px;
+    box-shadow:
+      0 4px 20px rgba(0,0,0,0.4),
+      0 20px 60px rgba(0,0,0,0.5);
     position: relative;
-    flex-shrink: 0;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(0,0,0,0.25) transparent;
+  }
+  .card-inner::-webkit-scrollbar { width: 6px; }
+  .card-inner::-webkit-scrollbar-track { background: transparent; }
+  .card-inner::-webkit-scrollbar-thumb {
+    background: rgba(0,0,0,0.25);
+    border-radius: 3px;
   }
 
-  .long-image .label {
+  /* 长图内容撑出 20000px 高度 */
+  .card-content {
+    width: 100%;
+    min-height: 20000px;
+    position: relative;
+  }
+
+  .card-label {
     position: sticky;
-    top: 40px;
-    display: inline-block;
-    left: 50%;
-    transform: translateX(-50%);
-    margin-top: 40px;
-    padding: 12px 28px;
-    background: rgba(255,255,255,0.7);
-    border-radius: 8px;
+    top: 36px;
+    display: block;
+    text-align: center;
+    padding-top: 36px;
     font-size: 18px;
-    font-weight: 600;
-    color: var(--placeholder-text);
+    font-weight: 800;
+    color: rgba(0,0,0,0.45);
     letter-spacing: 0.02em;
-    white-space: nowrap;
+    z-index: 2;
   }
-
-  .long-image .dimensions {
+  .card-dim {
     position: sticky;
-    top: 100px;
+    top: 72px;
     display: block;
     text-align: center;
     font-size: 13px;
-    color: var(--placeholder-text);
+    color: rgba(0,0,0,0.3);
     margin-top: 8px;
+    z-index: 2;
   }
 
-  /* ===== 左右箭头 ===== */
-  .nav-arrow {
-    position: fixed;
-    top: 50%;
-    transform: translateY(-50%);
-    width: 52px;
-    height: 52px;
-    border-radius: 50%;
-    background: var(--arrow-bg);
-    border: 1px solid #d0d0d0;
-    box-shadow: 0 2px 12px rgba(0,0,0,0.1);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    cursor: pointer;
-    z-index: 50;
-    transition: background 0.2s, transform 0.15s, box-shadow 0.2s;
-  }
-
-  .nav-arrow:hover:not(.disabled) {
-    background: var(--arrow-hover);
-    box-shadow: 0 4px 16px rgba(0,0,0,0.15);
-    transform: translateY(-50%) scale(1.08);
-  }
-
-  .nav-arrow:active:not(.disabled) {
-    transform: translateY(-50%) scale(0.95);
-  }
-
-  .nav-arrow.disabled {
-    opacity: 0.35;
-    cursor: not-allowed;
-    background: var(--arrow-disabled);
-  }
-
-  .nav-arrow.left {
-    left: 20px;
-  }
-
-  .nav-arrow.right {
-    right: 20px;
-  }
-
-  .nav-arrow svg {
-    width: 24px;
-    height: 24px;
-    stroke: #333;
-    stroke-width: 2.5;
-    fill: none;
-    stroke-linecap: round;
-    stroke-linejoin: round;
-  }
-
-  /* ===== 底部缩略指示 ===== */
+  /* ===== 底部提示 ===== */
   .bottom-hint {
     position: fixed;
     bottom: 16px;
@@ -209,31 +157,30 @@
     transform: translateX(-50%);
     font-size: 12px;
     color: var(--text-secondary);
-    background: rgba(255,255,255,0.8);
-    padding: 6px 16px;
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(255,255,255,0.08);
+    padding: 7px 18px;
     border-radius: 100px;
-    z-index: 50;
+    z-index: 150;
     pointer-events: none;
+    white-space: nowrap;
   }
 
   /* ===== 响应式 ===== */
-  @media (max-width: 768px) {
+  @media (max-width: 900px) {
+    :root { --card-w: 360px; --card-h: 80vh; }
+  }
+  @media (max-width: 600px) {
+    :root { --card-w: 280px; --card-h: 76vh; }
     .topbar { padding: 0 16px; }
-    .topbar-title { font-size: 14px; }
-    .nav-arrow {
-      width: 44px;
-      height: 44px;
-    }
-    .nav-arrow.left { left: 8px; }
-    .nav-arrow.right { right: 8px; }
-    .nav-arrow svg { width: 20px; height: 20px; }
-    .long-image .label { font-size: 15px; padding: 10px 20px; }
+    .topbar-title { font-size: 13px; }
+    .bottom-hint { font-size: 11px; padding: 5px 12px; }
   }
 </style>
 </head>
 <body>
 
-<!-- ===== 顶部栏 ===== -->
+<!-- 顶部栏 -->
 <header class="topbar">
   <div class="topbar-title">作品集 · 长图浏览</div>
   <div class="topbar-counter">
@@ -243,125 +190,217 @@
   </div>
 </header>
 
-<!-- ===== 主查看区 ===== -->
-<main class="viewer">
-  <!-- 左箭头 -->
-  <div class="nav-arrow left disabled" id="prevBtn" title="上一张 (←)">
-    <svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"></polyline></svg>
-  </div>
-
-  <!-- 图片滚动区 -->
-  <div class="image-container" id="imageContainer">
-    <div class="long-image" id="longImage">
-      <span class="label" id="imageLabel">长图 01 / 50</span>
-      <span class="dimensions">790 × 20000 px · 灰色占位</span>
-    </div>
-  </div>
-
-  <!-- 右箭头 -->
-  <div class="nav-arrow right" id="nextBtn" title="下一张 (→)">
-    <svg viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"></polyline></svg>
-  </div>
+<!-- 主查看区 -->
+<main class="viewer" id="viewer">
+  <div class="track" id="track"></div>
 </main>
 
-<!-- 底部提示 -->
-<div class="bottom-hint">使用 ← → 方向键或点击两侧箭头切换图片</div>
+<div class="bottom-hint">滚轮上下滚动查看长图 · 按住左键左右拖动切换图片</div>
 
 <script>
-  (function() {
-    var TOTAL = 50;
-    var current = 0; // 0-based index
+(function () {
+  "use strict";
 
-    var prevBtn = document.getElementById('prevBtn');
-    var nextBtn = document.getElementById('nextBtn');
-    var currentNum = document.getElementById('currentNum');
-    var totalNum = document.getElementById('totalNum');
-    var imageLabel = document.getElementById('imageLabel');
-    var imageContainer = document.getElementById('imageContainer');
-    var longImage = document.getElementById('longImage');
+  var TOTAL = 50;
+  var current = 0;       // 当前中心索引（整数）
+  var dragOffset = 0;    // 拖动偏移量（像素）
+  var isDragging = false;
+  var startX = 0;
+  var dragMoved = false;
+  var suppressClick = false;
 
-    totalNum.textContent = String(TOTAL).padStart(2, '0');
+  var viewer = document.getElementById("viewer");
+  var track = document.getElementById("track");
+  var currentNumEl = document.getElementById("currentNum");
+  var totalNumEl = document.getElementById("totalNum");
 
-    function pad(n) {
-      return String(n).padStart(2, '0');
+  totalNumEl.textContent = pad2(TOTAL);
+
+  function pad2(n) { return String(n).padStart(2, "0"); }
+
+  // ===== 创建 50 张卡片 =====
+  var cards = [];
+  for (var i = 0; i < TOTAL; i++) {
+    var card = document.createElement("div");
+    card.className = "card";
+    card.dataset.index = i;
+    card.innerHTML =
+      '<div class="card-inner">' +
+        '<div class="card-content">' +
+          '<span class="card-label">长图 ' + pad2(i + 1) + ' / ' + pad2(TOTAL) + '</span>' +
+          '<span class="card-dim">790 × 20000 px · 灰色网格</span>' +
+        '</div>' +
+      '</div>';
+    track.appendChild(card);
+    cards.push(card);
+
+    // 点击卡片 → 切换到该图
+    (function (idx) {
+      card.addEventListener("click", function () {
+        if (suppressClick) return;
+        goTo(idx);
+      });
+    })(i);
+  }
+
+  // ===== 布局计算：Cover Flow =====
+  function getCardWidth() {
+    var w = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--card-w"));
+    return isNaN(w) ? 500 : w;
+  }
+
+  function layout() {
+    var cardW = getCardWidth();
+    var spacing = cardW * 0.52;          // 卡片中心间距
+    var centerPos = current + dragOffset / spacing; // 实际中心（小数）
+
+    for (var i = 0; i < cards.length; i++) {
+      var card = cards[i];
+      var d = i - centerPos;
+      var absD = Math.abs(d);
+
+      // 超出范围的隐藏
+      if (absD > 7) {
+        card.style.opacity = "0";
+        card.style.pointerEvents = "none";
+        card.style.transform = "translateX(" + (d * spacing) + "px) scale(0.15)";
+        continue;
+      }
+
+      // 缩放：中心 1，每远一级衰减
+      var scale = Math.max(0.2, 1 - absD * 0.21);
+      // 水平位移
+      var tx = d * spacing;
+      // 透明度：远端渐隐
+      var opacity = Math.max(0, 1 - absD * 0.16);
+      // 层级：中心在上
+      var z = 1000 - Math.round(absD * 100);
+      // 透视旋转
+      var rotY = d * -5;
+
+      card.style.opacity = opacity.toFixed(3);
+      card.style.zIndex = z;
+      card.style.pointerEvents = absD < 2.8 ? "auto" : "none";
+      card.style.transform =
+        "translateX(" + tx.toFixed(1) + "px) " +
+        "scale(" + scale.toFixed(4) + ") " +
+        "rotateY(" + rotY.toFixed(1) + "deg)";
     }
 
-    function updateUI() {
-      var displayNum = current + 1;
-      currentNum.textContent = pad(displayNum);
-      imageLabel.textContent = '长图 ' + pad(displayNum) + ' / ' + pad(TOTAL);
+    // 计数器
+    var displayIdx = Math.max(0, Math.min(TOTAL - 1, Math.round(centerPos)));
+    currentNumEl.textContent = pad2(displayIdx + 1);
+  }
 
-      // 更新箭头禁用状态
-      prevBtn.classList.toggle('disabled', current === 0);
-      nextBtn.classList.toggle('disabled', current === TOTAL - 1);
+  // ===== 切换到指定索引（带顺滑动画） =====
+  function goTo(idx) {
+    idx = Math.max(0, Math.min(TOTAL - 1, idx));
+    for (var i = 0; i < cards.length; i++) cards[i].classList.remove("dragging");
+    current = idx;
+    dragOffset = 0;
+    layout();
+  }
 
-      // 切换时滚动回顶部
-      imageContainer.scrollTop = 0;
+  // ===== 鼠标拖动 =====
+  viewer.addEventListener("mousedown", function (e) {
+    if (e.button !== 0) return; // 仅左键
+    isDragging = true;
+    dragMoved = false;
+    startX = e.clientX;
+    viewer.classList.add("dragging");
+    for (var i = 0; i < cards.length; i++) cards[i].classList.add("dragging");
+    e.preventDefault();
+  });
+
+  document.addEventListener("mousemove", function (e) {
+    if (!isDragging) return;
+    var dx = e.clientX - startX;
+    if (Math.abs(dx) > 4) dragMoved = true;
+    if (dragMoved) {
+      dragOffset = dx;
+      layout();
     }
+  });
 
-    function goPrev() {
-      if (current > 0) {
-        current--;
-        updateUI();
-      }
+  document.addEventListener("mouseup", function () {
+    if (!isDragging) return;
+    isDragging = false;
+    viewer.classList.remove("dragging");
+
+    var cardW = getCardWidth();
+    var spacing = cardW * 0.52;
+    var threshold = spacing * 0.32;
+
+    var target = current;
+    if (dragOffset < -threshold) target = current + 1; // 左拖 → 下一张
+    else if (dragOffset > threshold) target = current - 1; // 右拖 → 上一张
+
+    for (var i = 0; i < cards.length; i++) cards[i].classList.remove("dragging");
+    current = Math.max(0, Math.min(TOTAL - 1, target));
+    dragOffset = 0;
+    layout();
+
+    // 抑制拖动后的误点击
+    if (dragMoved) {
+      suppressClick = true;
+      setTimeout(function () { suppressClick = false; }, 80);
     }
+  });
 
-    function goNext() {
-      if (current < TOTAL - 1) {
-        current++;
-        updateUI();
-      }
+  // ===== 滚轮：控制居中卡片内部上下滚动 =====
+  viewer.addEventListener("wheel", function (e) {
+    if (isDragging) return;
+    e.preventDefault();
+    var inner = cards[current].querySelector(".card-inner");
+    if (inner) inner.scrollTop += e.deltaY;
+  }, { passive: false });
+
+  // ===== 触摸滑动 =====
+  var touchStartX = 0, touchStartTime = 0, touchMoved = false;
+  viewer.addEventListener("touchstart", function (e) {
+    touchStartX = e.touches[0].clientX;
+    touchStartTime = Date.now();
+    touchMoved = false;
+    for (var i = 0; i < cards.length; i++) cards[i].classList.add("dragging");
+  }, { passive: true });
+
+  viewer.addEventListener("touchmove", function (e) {
+    var dx = e.touches[0].clientX - touchStartX;
+    if (Math.abs(dx) > 8) {
+      touchMoved = true;
+      dragOffset = dx;
+      layout();
+      e.preventDefault();
     }
+  }, { passive: false });
 
-    // 箭头点击
-    prevBtn.addEventListener('click', goPrev);
-    nextBtn.addEventListener('click', goNext);
+  viewer.addEventListener("touchend", function () {
+    for (var i = 0; i < cards.length; i++) cards[i].classList.remove("dragging");
+    if (touchMoved) {
+      var cardW = getCardWidth();
+      var spacing = cardW * 0.52;
+      var threshold = spacing * 0.3;
+      var target = current;
+      if (dragOffset < -threshold) target = current + 1;
+      else if (dragOffset > threshold) target = current - 1;
+      current = Math.max(0, Math.min(TOTAL - 1, target));
+      dragOffset = 0;
+      layout();
+    }
+  });
 
-    // 键盘左右键
-    document.addEventListener('keydown', function(e) {
-      if (e.key === 'ArrowLeft') {
-        e.preventDefault();
-        goPrev();
-      } else if (e.key === 'ArrowRight') {
-        e.preventDefault();
-        goNext();
-      }
-    });
+  // ===== 键盘 =====
+  document.addEventListener("keydown", function (e) {
+    if (e.key === "ArrowLeft") { e.preventDefault(); goTo(current - 1); }
+    else if (e.key === "ArrowRight") { e.preventDefault(); goTo(current + 1); }
+  });
 
-    // 触摸滑动支持（左右滑切换）
-    var touchStartX = 0;
-    var touchStartY = 0;
-    var isHorizontalSwipe = false;
+  // ===== 窗口缩放 =====
+  window.addEventListener("resize", layout);
 
-    imageContainer.addEventListener('touchstart', function(e) {
-      touchStartX = e.touches[0].clientX;
-      touchStartY = e.touches[0].clientY;
-      isHorizontalSwipe = false;
-    }, { passive: true });
-
-    imageContainer.addEventListener('touchmove', function(e) {
-      var dx = e.touches[0].clientX - touchStartX;
-      var dy = e.touches[0].clientY - touchStartY;
-      // 判断是否为水平滑动（水平位移大于垂直位移且超过阈值）
-      if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 30) {
-        isHorizontalSwipe = true;
-      }
-    }, { passive: true });
-
-    imageContainer.addEventListener('touchend', function(e) {
-      if (isHorizontalSwipe) {
-        var dx = e.changedTouches[0].clientX - touchStartX;
-        if (dx > 50) {
-          goPrev(); // 向右滑 → 上一张
-        } else if (dx < -50) {
-          goNext(); // 向左滑 → 下一张
-        }
-      }
-    }, { passive: true });
-
-    // 初始化
-    updateUI();
-  })();
+  // 初始化
+  layout();
+})();
 </script>
 
 </body>
