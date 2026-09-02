@@ -107,12 +107,16 @@
     background: #999;
   }
 
-  /* 长图占位 —— 790 x 20000 */
+  /* 长图占位 —— 790 x 20000，灰色底黑色网格 */
   .long-image {
     width: 790px;
     max-width: 100%;
     min-height: 20000px;
-    background: var(--placeholder);
+    background-color: var(--placeholder);
+    background-image:
+      linear-gradient(to right, rgba(0,0,0,0.18) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(0,0,0,0.18) 1px, transparent 1px);
+    background-size: 50px 50px;
     position: relative;
     flex-shrink: 0;
   }
